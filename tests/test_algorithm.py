@@ -78,7 +78,7 @@ def test_hand_example_evaluation_rows(hand_analysis):
     rows = ev.dosis_rows(hand_analysis)
     assert [(r["fz"], r["cap_z"], r["solvable"]) for r in rows] == [(0, 0, False), (25, 2, False), (50, 3, True), (75, 5, True), (100, 6, True)]
     w = ev.who_pays(hand_analysis)
-    assert w["total"] == 5 and w["top_share"] == 1.0 and w["persons"] == 1 and w["cheapest_pays"]
+    assert w["total"] == 5 and w["top_share"] == 1.0 and w["persons"] == 1 and w["cheapest_pays"] and w["cheapest_alone"] and w["carriers"] == [w["cheapest"]]
     e = ev.edge_info(hand_analysis)
     assert e["kpi"]["z_full"] == 1 and not e["kpi"]["ok_delta"] and e["true"]["ok_delta"] and e["delta"] == 20 and e["kpi"]["ok_by_delta"] == {2: False, 5: False, 10: False, 20: False}
     rr = ev.reserve_rows(hand_analysis)

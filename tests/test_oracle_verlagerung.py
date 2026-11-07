@@ -102,3 +102,39 @@ def test_the_capacity_formula_matches_a_ceiling_in_exact_fractions():
             for fz in (0, 25, 50, 100):
                 cap_r = math.ceil(Fraction(fr, 100) * sum(Fraction(sum(inst.b[i][j] for i in range(3)), 3) for j in range(6)) / 3)
                 assert S.capacities(inst.arrays()[1], 3, fr, fz) == (cap_r, math.ceil(Fraction(fz, 100) * cap_r))
+
+
+@pytest.mark.parametrize("n,m,family,seed", CASES)
+def test_who_pays_matches_plain_python_and_ties_are_not_decided_by_the_index(n, m, family, seed):
+    import vrl_evaluation as ev
+    inst = S.make_instance(n, m, family, seed)
+    a = ev.analyse(ev.Settings(n=n, m=m, family=family, seed=seed))
+    w = ev.who_pays(a)
+    plain = _plain(inst)
+    feas = [row for row in plain if _ok(inst, row)]
+    if not feas:
+        assert w is None
+        return
+    zl = next(row for row in feas if row[1] == min(r[1] for r in feas))[4]           # Überstunden je Person im Optimum der Kennzahl (erstes bei Gleichstand)
+    want = [i + 1 for i in range(n) if max(zl) > 0 and zl[i] == max(zl)]               # jede Person auf dem Maximum trägt
+    means = [Fraction(sum(inst.a[i]), m) for i in range(n)]
+    cheapest = means.index(min(means))
+    assert w["carriers"] == want and w["cheapest"] == cheapest + 1
+    assert w["cheapest_pays"] == ((cheapest + 1) in want) and w["cheapest_alone"] == (want == [cheapest + 1])
+    assert w["dearest_pays"] == ((means.index(max(means)) + 1) in want)
+    assert w["persons"] == sum(1 for z in zl if z > 0) and w["total"] == sum(zl)
+
+
+def test_carriers_ignore_the_numbering():
+    import vrl_evaluation as ev
+    assert ev.carriers([4, 4, 4]) == [0, 1, 2] and ev.carriers([0, 4, 4]) == [1, 2] and ev.carriers([3, 5, 1]) == [1] and ev.carriers([0, 0, 0]) == [] and ev.carriers([]) == []
+    for z in ([4, 4, 2], [2, 4, 4], [4, 2, 4]):                                      # dieselbe Verteilung, andere Nummerierung: gleich viele Träger
+        assert len(ev.carriers(z)) == 2 and all(z[i] == 4 for i in ev.carriers(z))
+
+
+def test_no_cost_ties_between_persons_in_the_sweep_instances():
+    for family in (0, 1):
+        for seed in __import__("vrl_constants").SWEEP_SEEDS:
+            inst = S.make_instance(3, 7, family, seed, 80, 50)
+            means = [sum(row) for row in inst.a]
+            assert means.count(min(means)) == 1 and means.count(max(means)) == 1

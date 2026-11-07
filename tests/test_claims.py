@@ -91,8 +91,12 @@ def test_payer_claims(sw):
     _claim("unabhängig **93 %** (82 %) gegen 28 %; Person 90 % (81 %) gegen 18 %")
     assert [(ev.pct(pay[f]["top_share"][1], 0), int(pay[f]["persons"][1])) for f in (0, 1)] == [("37 %", 3), ("38 %", 3)]
     _claim("unabhängig 37 %, 3 Personen; Person 38 %, 3 Personen")
-    assert [pay[f]["cheapest"] for f in (0, 1)] == [9, 3] and [pay[f]["n_z"] for f in (0, 1)] == [20, 20]
-    _claim("**9 / 20** (unabhängig), **3 / 20** (Person)")
+    assert [pay[f]["cheapest"] for f in (0, 1)] == [13, 10] and [pay[f]["n_z"] for f in (0, 1)] == [20, 20]
+    _claim("**13 / 20** (unabhängig), **10 / 20** (Person)")
+    assert [pay[f]["cheapest_alone"] for f in (0, 1)] == [3, 1] and [pay[f]["tied"] for f in (0, 1)] == [12, 11] and [pay[f]["dearest"] for f in (0, 1)] == [12, 9]
+    _claim("allein in 3 und 1 Instanz; Gleichstand an der Spitze in 12 und 11; die im Mittel teuerste Person trägt allein oder gleichauf die meisten in 12 und 9")
+    _claim("in 13 von 20 (unabhängig) und 10 von 20 (Person), die im Mittel teuerste in 12 und 9")
+    assert "nahe dem Zufall" not in README
 
 
 def test_edge_claims(sw):
@@ -148,6 +152,8 @@ def test_preset_claims():
     w = ev.who_pays(_analysis(P_ALL))
     assert list(w["kpi_opt"]["zload"]) == [4, 4, 4] and ev.pct(w["top_share"], 0) == "33 %" and ev.pct(w["kpi_opt"]["zshare"], 0) == "92 %"
     _claim("Überstunden je Person 4 / 4 / 4 Stunden, größter Anteil **33 %**, Überstunden-Anteil der wahren Kosten **92 %**")
+    assert w["carriers"] == [1, 2, 3] and w["cheapest"] == 3 and w["cheapest_pays"]
+    _claim("alle drei tragen gleichauf die meisten, auch die im Mittel billigste (P3)")
     e = ev.edge_info(_analysis(P_EDGE))
     assert e["kpi"]["z_full"] == 2 and not e["kpi"]["ok_by_delta"][2] and all(e["true"]["ok_by_delta"].values())
     _claim("im Optimum der Kennzahl 2 Überstundengrenzen genau voll, schon bei +2 % unzulässig; das wahre Optimum hält bis +20 %")

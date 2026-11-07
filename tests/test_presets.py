@@ -69,6 +69,7 @@ def test_big_place_preset_puts_every_task_into_overtime():
 def test_all_pay_preset_spreads_the_overtime_evenly():
     w = ev.who_pays(_a(P_ALL))
     assert list(w["kpi_opt"]["zload"]) == [4, 4, 4] and w["persons"] == 3 and round(w["top_share"] * 100) == 33 and round(w["kpi_opt"]["zshare"] * 100) == 92
+    assert w["carriers"] == [1, 2, 3] and w["cheapest_pays"] and not w["cheapest_alone"]      # Gleichstand: alle drei tragen die meisten, die billigste P3 ebenfalls
 
 
 def test_edge_preset_tips_the_kpi_optimum_but_not_the_true_one_at_five_percent():

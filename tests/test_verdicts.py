@@ -43,9 +43,12 @@ def test_payers_verdict_cases():
     kind, text = ev.verdict_payers(ev.who_pays(_a(P_MAIN)))
     assert text == ("Im Optimum der Kennzahl stecken **94 %** der wahren Kosten in den Überstunden, im wahren Optimum 8 %. Die Überstunden verteilen sich auf **3** von 3 Personen; "
                     "die am stärksten belastete trägt 42 % davon. Die im Mittel billigste Person (P1) trägt nicht die meisten.")
-    assert "Die im Mittel billigste Person (P2) trägt die meisten." in ev.verdict_payers(ev.who_pays(_a(P_EDGE)))[1]
+    assert "Die im Mittel billigste Person (P2) trägt gleichauf mit P3 die meisten." in ev.verdict_payers(ev.who_pays(_a(P_EDGE)))[1]
+    assert "Die im Mittel billigste Person (P1) trägt allein die meisten." in ev.verdict_payers(ev.who_pays(_a(P_SMALL)))[1]
     assert ev.verdict_payers(ev.who_pays(_a(P_NONE)))[1] == "Im Optimum der Kennzahl gibt es keine Überstunden; die wahren Kosten sind 222."
-    assert "die am stärksten belastete trägt 33 % davon" in ev.verdict_payers(ev.who_pays(_a(P_ALL)))[1]
+    text = ev.verdict_payers(ev.who_pays(_a(P_ALL)))[1]                    # 4 / 4 / 4: Gleichstand, die Nummerierung entscheidet nichts
+    assert "die am stärksten belastete trägt 33 % davon" in text and text.endswith("Die im Mittel billigste Person (P3) trägt gleichauf mit P1 und P2 die meisten.")
+    assert "nicht die meisten" not in text
 
 
 def test_edge_verdict_cases():
@@ -72,7 +75,7 @@ def test_sweep_verdicts_carry_the_phase_zero_numbers():
     text = ev.verdict_g_sweep(g)[1]
     assert "g = 100 %: verschieden in 20 von 20, Kennzahl besser um Median 82,4 % (Minimum 32,5 %), wahre Kosten höher um Median 50,8 % (Maximum 121,5 %)" in text
     payers = {fam: ev.summary_payers(recs) for fam, recs in sw.items()}
-    assert payers[0]["cheapest"] == 9 and payers[1]["cheapest"] == 3 and "die billigste trägt die meisten in 9 von 20" in ev.verdict_payers_sweep(payers)[1]
+    assert payers[0]["cheapest"] == 13 and payers[1]["cheapest"] == 10 and "die billigste trägt allein oder gleichauf die meisten in 13 von 20 (allein in 3), die teuerste in 12; Gleichstand an der Spitze in 12" in ev.verdict_payers_sweep(payers)[1]
     edge = {fam: ev.summary_edge(recs) for fam, recs in sw.items()}
     assert [edge[0]["brittle"][d]["k"] for d in C.SWEEP_DELTAS] == [3, 3, 3, 2] and [edge[0]["brittle"][d]["t"] for d in C.SWEEP_DELTAS] == [2, 2, 2, 0]
     assert "bleibt zulässig bei +2 %: Kennzahl 3, wahr 2" in ev.verdict_edge_sweep(edge)[1]

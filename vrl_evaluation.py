@@ -26,6 +26,11 @@ def pct(x: float, digits: int = 1) -> str:
     return de(x * 100.0, digits) + " %"
 
 
+def _und(items: list[str]) -> str:
+    """„P1“, „P1 und P2“, „P1, P2 und P3“."""
+    return items[0] if len(items) == 1 else ", ".join(items[:-1]) + " und " + items[-1]
+
+
 def vtext(x: float) -> str:
     """Wert ohne Nachkommastellen, wenn ganzzahlig, sonst mit zwei (Kosten mit Zuschlag 1,25 haben Viertel)."""
     if float(x).is_integer():
@@ -106,17 +111,32 @@ def dosis_rows(a: Analysis, fzs=(0, 25, 50, 75, 100)) -> list[dict]:
     return rows
 
 
+def carriers(z) -> list[int]:
+    """Wer „trägt die meisten Überstunden“: jede Person, deren Überstunden das Maximum erreichen (nullbasiert, aufsteigend). Gleichstand macht alle Gleichauf-Personen zu Trägern, die
+    Nummerierung entscheidet nichts; ohne Überstunden (Maximum 0) trägt niemand."""
+    z = np.asarray(z)
+    return [int(i) for i in np.flatnonzero(z == z.max())] if z.size and z.max() > 0 else []
+
+
+def cost_extremes(inst) -> tuple[int, int]:
+    """Die im Mittel billigste und die im Mittel teuerste Person (nullbasiert). Bei gleichem Mittel zählt der kleinste Index; in den 40 festen Instanzen kommt das nicht vor (Test)."""
+    means = np.array(inst.a).mean(axis=1)
+    return int(np.argmin(means)), int(np.argmax(means))
+
+
 def who_pays(a: Analysis) -> dict | None:
-    """Überstunden je Person im Optimum der Kennzahl und im wahren Optimum; Anteil an den wahren Kosten."""
+    """Überstunden je Person im Optimum der Kennzahl und im wahren Optimum; Anteil an den wahren Kosten. „carriers“ sind alle Personen auf dem Maximum der Überstunden (Gleichstände zählen
+    für jede Person, nicht für die mit dem kleinsten Index); „cheapest_pays“ heißt: die billigste Person ist unter ihnen, „cheapest_alone“: sie ist die einzige."""
     if a.kpi_idx is None or a.true_idx is None:
         return None
     s, p = a.settings, a.p
     k, t = _optimum_info(p, a.kpi_idx, s.g), _optimum_info(p, a.true_idx, s.g)
     z = k["zload"]
     total = int(z.sum())
-    cheapest = int(np.argmin(np.array(p.inst.a).mean(axis=1)))
-    return {"kpi_opt": k, "true_opt": t, "total": total, "top_share": (z.max() / total) if total else None, "persons": int((z > 0).sum()), "cheapest_pays": bool(total and int(np.argmax(z)) == cheapest),
-            "cheapest": cheapest + 1}
+    cheapest, dearest = cost_extremes(p.inst)
+    car = carriers(z)
+    return {"kpi_opt": k, "true_opt": t, "total": total, "top_share": (z.max() / total) if total else None, "persons": int((z > 0).sum()), "carriers": [i + 1 for i in car],
+            "cheapest_pays": cheapest in car, "cheapest_alone": car == [cheapest], "cheapest": cheapest + 1, "dearest_pays": dearest in car, "dearest": dearest + 1}
 
 
 def edge_info(a: Analysis) -> dict | None:
@@ -173,12 +193,16 @@ def _record(family: int, seed: int) -> dict:
     tc = A.true_cost(p, g)
     t = A.best(p, tc)
     z = p.zload[k]
-    cheapest = int(np.argmin(np.array(inst.a).mean(axis=1)))
+    cheapest, dearest = cost_extremes(inst)
+    car = carriers(z)
     rec["zshare_k"] = g / 100.0 * p.zcost[k] / tc[k]
     rec["zshare_t"] = g / 100.0 * p.zcost[t] / tc[t]
     rec["top_share"] = (z.max() / z.sum()) if z.sum() else None
     rec["z_persons"] = int((z > 0).sum())
-    rec["cheapest_pays"] = bool(z.sum() and int(np.argmax(z)) == cheapest)
+    rec["cheapest_pays"] = cheapest in car
+    rec["cheapest_alone"] = car == [cheapest]
+    rec["dearest_pays"] = dearest in car
+    rec["n_carriers"] = len(car)
     rec["full"] = {}
     for name, idx in (("k", k), ("t", t)):
         lim = A.full_limits(p, idx)
@@ -219,7 +243,8 @@ def summary_g(recs: list[dict]) -> dict:
 def summary_payers(recs: list[dict]) -> dict:
     withz = [r for r in recs if r["top_share"] is not None]
     return {"zshare_k": _q3([r["zshare_k"] for r in recs]), "zshare_t": _q3([r["zshare_t"] for r in recs]), "n_z": len(withz), "top_share": _q3([r["top_share"] for r in withz]) if withz else (0.0, 0.0, 0.0),
-            "persons": _q3([r["z_persons"] for r in withz]) if withz else (0.0, 0.0, 0.0), "cheapest": sum(r["cheapest_pays"] for r in withz), "seeds": len(recs)}
+            "persons": _q3([r["z_persons"] for r in withz]) if withz else (0.0, 0.0, 0.0), "cheapest": sum(r["cheapest_pays"] for r in withz),
+            "cheapest_alone": sum(r["cheapest_alone"] for r in withz), "dearest": sum(r["dearest_pays"] for r in withz), "tied": sum(r["n_carriers"] > 1 for r in withz), "seeds": len(recs)}
 
 
 def summary_edge(recs: list[dict]) -> dict:
@@ -277,7 +302,13 @@ def verdict_payers(w: dict | None) -> tuple[str, str]:
     if w["total"] == 0:
         return "info", f"Im Optimum der Kennzahl gibt es keine Überstunden; die wahren Kosten sind {vtext(k['true'])}."
     persons = f"Die Überstunden verteilen sich auf **{w['persons']}** von {len(k['zload'])} Personen; die am stärksten belastete trägt {pct(w['top_share'], 0)} davon."
-    cheap = f" Die im Mittel billigste Person (P{w['cheapest']}) trägt die meisten." if w["cheapest_pays"] else f" Die im Mittel billigste Person (P{w['cheapest']}) trägt nicht die meisten."
+    others = [f"P{i}" for i in w["carriers"] if i != w["cheapest"]]
+    if not w["cheapest_pays"]:
+        cheap = f" Die im Mittel billigste Person (P{w['cheapest']}) trägt nicht die meisten."
+    elif others:
+        cheap = f" Die im Mittel billigste Person (P{w['cheapest']}) trägt gleichauf mit {_und(others)} die meisten."
+    else:
+        cheap = f" Die im Mittel billigste Person (P{w['cheapest']}) trägt allein die meisten."
     return "info", (f"Im Optimum der Kennzahl stecken **{pct(k['zshare'], 0)}** der wahren Kosten in den Überstunden, im wahren Optimum {pct(t['zshare'], 0)}. " + persons + cheap)
 
 
@@ -327,7 +358,7 @@ def verdict_dosis_sweep(res: dict) -> tuple[str, str]:
 
 def verdict_payers_sweep(res: dict) -> tuple[str, str]:
     parts = [f"{C.FAMILIES[fam]}: Überstunden-Anteil der wahren Kosten im Optimum der Kennzahl {pct(s['zshare_k'][1], 0)} (Minimum {pct(s['zshare_k'][0], 0)}), im wahren {pct(s['zshare_t'][1], 0)}; "
-             f"die am stärksten belastete Person trägt {pct(s['top_share'][1], 0)}, {int(s['persons'][1])} Personen mit Überstunden (Median), die billigste trägt die meisten in {s['cheapest']} von {s['n_z']}" for fam, s in res.items()]
+             f"die am stärksten belastete Person trägt {pct(s['top_share'][1], 0)}, {int(s['persons'][1])} Personen mit Überstunden (Median), die billigste trägt allein oder gleichauf die meisten in {s['cheapest']} von {s['n_z']} (allein in {s['cheapest_alone']}), die teuerste in {s['dearest']}; Gleichstand an der Spitze in {s['tied']}" for fam, s in res.items()]
     return "info", "Wer zahlt (Median, Zuschlag 125 %): " + "; ".join(parts) + "."
 
 
