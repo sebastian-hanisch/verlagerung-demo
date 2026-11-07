@@ -99,7 +99,7 @@ with st.sidebar:
     st.markdown("**Instanz**")
     n = st.slider("Personen n", *bounds("n_slider"), key="n_slider", help="Alle (2n)^m Pläne werden aufgezählt (bis 279 936).")
     m = st.slider("Aufgaben m", *bounds("m_slider"), key="m_slider")
-    family = st.selectbox("Kosten", list(range(len(C.FAMILIES))), key="family_select", format_func=lambda i: C.FAMILIES[i], help="Beim Personeneffekt ist eine Person für fast alle Aufgaben billiger.")
+    family = st.selectbox("Kosten", list(range(len(C.FAMILIES))), key="family_select", format_func=lambda i: C.FAMILIES[i], help="Beim Personeneffekt ist eine Person für etwa die Hälfte bis zwei Drittel der Aufgaben die billigste.")
     seed = st.number_input("Zufalls-Seed der Instanz", *bounds("seed_input"), key="seed_input", step=1)
     st.button("🎲 Neue Instanz generieren", width="stretch", on_click=randomize_seed)
     st.markdown("**Kapazität und Preis**")
@@ -134,7 +134,7 @@ else:
     m2.metric("Wahre Kosten des Plans", vtext(chosen["true"]), delta=f"{pct(abs((chosen['true'] - other['true']) / other['true']) if other['true'] else 0.0)} {'höher' if chosen['true'] >= other['true'] else 'niedriger'} als das andere Optimum", delta_color="off")
     m3.metric("Aufgaben in Überstunden", f"{chosen['nz']} von {settings.m}", delta=f"{chosen['zhours']} Stunden; Anteil an den wahren Kosten {pct(chosen['zshare'], 0)}", delta_color="off")
 st.plotly_chart(build_cloud(a.p, settings.g, a.kpi_idx, a.true_idx), width="stretch", key="cloud_chart")
-st.caption("Jeder Punkt ist ein zulässiger Plan: Kennzahl waagerecht, wahre Kosten senkrecht. Links unten wäre für beides gut. Die Raute (Optimum der Kennzahl) liegt ganz links, aber hoch; der Stern (wahres Optimum) liegt tief, aber weiter rechts.")
+st.caption("Jeder Punkt ist ein zulässiger Plan: Kennzahl waagerecht, wahre Kosten senkrecht. Links unten wäre für beides gut. Wenn die Optima verschieden sind, liegt die Raute (Optimum der Kennzahl) ganz links, aber hoch, und der Stern (wahres Optimum) tief, aber weiter rechts; sonst fallen beide zusammen.")
 st.download_button("📄 Ergebnis als PDF", data=build_pdf(a), file_name="verlagerung.pdf", mime="application/pdf", key="pdf_download")
 
 # --- Kernfrage -----------------------------------------------------------------------------------------------------------------------------
@@ -193,7 +193,7 @@ if st.toggle("Wer zahlt über feste Instanzen nachrechnen", value=False, key="sw
 st.markdown("---")
 
 st.subheader("🔬 Der Rand")
-st.caption("Ein Optimum liegt auf dem Rand der Kapazität (100 % Auslastung heißt: Reserve null). Wachsen alle Zeiten um den eingestellten Anteil, bleibt der Plan zulässig?")
+st.caption("Ein Optimum liegt meist auf dem Rand der Kapazität (in 17 bis 19 von 20 Instanzen; 100 % Auslastung heißt: Reserve null). Wachsen alle Zeiten um den eingestellten Anteil, bleibt der Plan zulässig?")
 e = edge_info(a)
 if e is not None:
     st.plotly_chart(build_edge(e), width="stretch", key="edge_chart")
@@ -229,9 +229,9 @@ st.markdown(
 |---|---|---|
 | **Die Überstunden sind frei und begrenzt** | Der Effekt ist durch den Aufbau groß (der unsichtbare Ort kostet die Kennzahl nichts); die Aussage ist die Dosis-Wirkung über die Überstundenkapazität, nicht die absolute Höhe | Stück 9 (Lücken ausnutzen) |
 | **Kosten gleich, Zuschlag als Faktor** | Überstunden haben hier dieselben Kosten wie Regelzeit mal Zuschlag; echte Überstunden unterscheiden sich in Person, Tarif und Folgeschäden | Stück 6 (Hart gegen weich) |
-| **Alle Pläne aufgezählt, wenige Personen** | Bis 279 936 Pläne (3 Personen, 7 Aufgaben); bei großen Problemen braucht es einen Löser, das Verhalten ändert sich nicht | Dokumentation des Lösers |
+| **Alle Pläne aufgezählt, wenige Personen** | Bis 279 936 Pläne (3 Personen, 7 Aufgaben); die Aufzählung liefert hier die Optima der jeweiligen Instanz; bei großen Problemen braucht es einen Löser, und die Größe der Wirkung wächst mit der Instanzgröße, für größere Probleme ist sie nicht untersucht | Dokumentation des Lösers |
 | **Sprödheit = alle Zeiten wachsen gleichmäßig** | Eine zufällige Störung je Aufgabe oder eine Verschiebung des Ziels kippt andere Pläne | Stück 11 (Sensitivität und Planstabilität) |
-| **Reserve = Kapazität durch 1 + δ, abgerundet** | Bei ganzen Zahlen ergeben 5 und 10 % dieselbe Kapazität; andere Reserveregeln kosten anders | – |
+| **Reserve = Kapazität durch 1 + δ, abgerundet** | Bei kleinen ganzzahligen Kapazitäten (bis 11 Stunden) ergeben 5 und 10 % oft dieselbe Kapazität; andere Reserveregeln kosten anders | – |
 | **Wer zahlt: die Personen** | Gezahlt wird im unsichtbaren Konto, nicht von einer Person; ob die Last einen anderen Zahler trifft (Lieferant, Kunde, Folgeperiode), zeigt das Modell nicht | `bullwhip-demo` (Lieferkette) |
 """
 )
@@ -247,7 +247,7 @@ with st.expander("📐 Mathematische Formulierung"):
 
 **Kennzahl und wahre Kosten.** $\mathrm{KPI} = \sum_{j: s_j = R} a_{x_j j}$ und $T_g = \mathrm{KPI} + g \sum_{j: s_j = Z} a_{x_j j}$ mit dem Zuschlag $g \ge 1$. Das **Optimum der Kennzahl** minimiert KPI, das **wahre Optimum** $T_g$ (bei Gleichstand der kleinste Index).
 
-**Verschiebung.** Ohne Überstundenkapazität ($\mathrm{cap}_Z = 0$) ist jede Aufgabe in der Regelzeit, KPI $= T_g$ und die Optima sind gleich. Mit Kapazität senkt das Optimum der Kennzahl KPI, indem es Aufgaben in die Überstunden legt (bis $L^Z_i = \mathrm{cap}_Z$), und wählt dort die Person ohne Blick auf die Kosten: $T_g$ steigt.
+**Verschiebung.** Ohne Überstundenkapazität ($\mathrm{cap}_Z = 0$) ist jede Aufgabe in der Regelzeit, KPI $= T_g$ und die Optima sind gleich. Mit Kapazität senkt das Optimum der Kennzahl KPI, indem es Aufgaben in die Überstunden legt (bis $L^Z_i = \mathrm{cap}_Z$), und wählt dort die Person ohne Blick auf die Kosten: $T_g$ kann steigen, und steigt in allen gezählten Instanzen (um mindestens 11 %), ist aber nicht zwingend höher.
 
 **Rand und Sprödheit.** Ein Plan hat Reserve null in Person $i$, wenn $L^R_i = \mathrm{cap}_R$ oder $L^Z_i = \mathrm{cap}_Z$. Wachsen alle Zeiten um $\delta$ Prozent, bleibt er zulässig, wenn $L(100 + \delta) \le 100\,\mathrm{cap}$ (ganzzahlig, exakt). **Reserve:** Kapazitäten $\lfloor 100\,\mathrm{cap} / (100 + \delta) \rfloor$; Preis der Reserve = $T_g$ des neuen Optimums gegen das alte.
 
